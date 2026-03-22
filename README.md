@@ -3,7 +3,7 @@
 
  * import this repo in your local machine
 
-## step get get your cookie
+## step get your cookie
 - go to https://console.x.ai/playground/imagine?campaign=imagine-landing
 - open network tab
 - start creating any image you want, 
