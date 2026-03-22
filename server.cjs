@@ -31,7 +31,6 @@ app.post('/api/generate', (req, res) => {
     'headers': {
       'accept': '*/*',
       'accept-language': 'en-US,en;q=0.9,hi;q=0.8',
-      'baggage': process.env.VITE_XAI_BAGGAGE || '',
       'content-type': 'application/json',
       'origin': 'https://console.x.ai',
       'sec-fetch-dest': 'empty',
