@@ -1,40 +1,126 @@
-import React from 'react';
+import React, { useState } from 'react';
+import type { GenerateImageData } from '../services/api';
 
 interface ImageDisplayProps {
-  imageUrl: string;
+  imagesData: GenerateImageData[];
   isLoading: boolean;
 }
 
-const ImageDisplay: React.FC<ImageDisplayProps> = ({ imageUrl, isLoading }) => {
-  const handleDownload = () => {
+const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, isLoading }) => {
+  const [zoomStates, setZoomStates] = useState<Record<number, number>>({});
+
+  const getSource = (data: GenerateImageData) => {
+    if (data.url) return data.url;
+    if (data.b64_json) return `data:${data.mime_type};base64,${data.b64_json}`;
+    return '';
+  };
+
+  const handleDownload = (data: GenerateImageData, idx: number) => {
+    const src = getSource(data);
+    if (!src) return;
     const link = document.createElement('a');
-    link.href = imageUrl;
-    link.download = `generated-image-${Date.now()}.png`;
+    const extension = data.mime_type.split('/')[1] || 'mp4';
+    link.href = src;
+    link.download = `generated-${idx}-${Date.now()}.${extension}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  return (
-    <div className="image-display-container">
-      <div className="image-preview-wrapper">
-        {isLoading ? (
-          <div className="loader"></div>
-        ) : imageUrl ? (
-          <img src={imageUrl} alt="Generated" className="generated-image" />
-        ) : (
-          <div className="placeholder-content">
-            <p>Your generated image will appear here</p>
-            <small>Enter a prompt and click generate to start</small>
-          </div>
-        )}
-      </div>
+  const handleOpenInNewWindow = (data: GenerateImageData) => {
+    const src = getSource(data);
+    if (!src) return;
+    const win = window.open();
+    if (win) {
+      const title = data.revised_prompt || 'Generated Content';
+      const content = data.mime_type.startsWith('video/') 
+        ? `<video src="${src}" controls autoplay loop style="max-width:100%; max-height:100vh;"></video>`
+        : `<img src="${src}" style="max-width:100%; max-height:100vh;" />`;
 
-      {imageUrl && !isLoading && (
-        <button onClick={handleDownload} className="download-button">
-          Download Image
-        </button>
-      )}
+      win.document.write(`
+        <html>
+          <body style="margin:0; background:#000; display:flex; justify-content:center; align-items:center; min-height:100vh;">
+            ${content}
+          </body>
+        </html>
+      `);
+      win.document.close();
+    }
+  };
+
+  const toggleZoom = (idx: number) => {
+    setZoomStates(prev => ({
+      ...prev,
+      [idx]: prev[idx] === 2 ? 1 : 2
+    }));
+  };
+
+  if (isLoading) {
+    return (
+      <div className="gallery-container">
+        <div className="loader-wrapper">
+          <div className="loader"></div>
+          <p>Processing results...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (imagesData.length === 0) {
+    return (
+      <div className="gallery-container">
+        <div className="placeholder-content">
+          <p>Your generated content will appear here</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="gallery-grid">
+      {imagesData.map((data, idx) => {
+        const isZoomed = zoomStates[idx] === 2;
+        const src = getSource(data);
+
+        return (
+          <div key={idx} className={`gallery-item ${isZoomed ? 'zoomed' : ''}`}>
+            <div className="image-card">
+              <div className="image-container">
+                {data.mime_type.startsWith('video/') ? (
+                  <video src={src} controls loop autoPlay muted />
+                ) : (
+                  <img 
+                    src={src} 
+                    alt={data.revised_prompt} 
+                    style={{ transform: `scale(${zoomStates[idx] || 1})` }}
+                  />
+                )}
+              </div>
+              
+              <div className="image-overlay">
+                <div className="overlay-actions">
+                  {!data.mime_type.startsWith('video/') && (
+                    <button onClick={() => toggleZoom(idx)} title="Toggle Zoom">
+                      {isZoomed ? '🔍-' : '🔍+'}
+                    </button>
+                  )}
+                  <button onClick={() => handleOpenInNewWindow(data)} title="Open Fullscreen">
+                    ⛶
+                  </button>
+                  <button onClick={() => handleDownload(data, idx)} title="Download">
+                    ↓
+                  </button>
+                </div>
+                {data.revised_prompt && (
+                  <div className="overlay-prompt">
+                    {data.revised_prompt}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };
