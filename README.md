@@ -23,4 +23,6 @@
   in a new terminal run this command 
 - ```node server.cjs```
 
+## generate 
+- now you can go to http://localhost:5173 and start generating images.
 thats all....
