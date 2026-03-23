@@ -41,14 +41,12 @@ export const generateImage = async (params: GenerateImageParams): Promise<Genera
   } = params;
 
   const isVideo = model.includes('video');
-  const endpoint = isVideo ? '/v1/videos/generations' : '/v1/images/generations';
 
-  let body: any;
+  let body: Record<string, unknown>;
 
   if (isVideo) {
     // STRICT Video Body
-    body = {
-      endpoint,
+    const videoBody: Record<string, unknown> = {
       model,
       prompt,
       resolution: (resolution === '2k' || resolution === '720p') ? '720p' : '480p',
@@ -56,12 +54,12 @@ export const generateImage = async (params: GenerateImageParams): Promise<Genera
       respect_moderation: false
     };
     if (image_url && image_url.startsWith('data:')) {
-      body.image = { url: image_url };
+      videoBody.image = { url: image_url };
     }
+    body = videoBody;
   } else {
     // STRICT Image Body
     body = {
-      endpoint,
       model,
       prompt,
       n,
@@ -71,10 +69,11 @@ export const generateImage = async (params: GenerateImageParams): Promise<Genera
     };
   }
 
-  const response = await fetch('http://localhost:3001/api/generate', {
+  const endpoint = isVideo ? '/v1/videos/generations' : '/v1/images/generations';
+  const response = await fetch(`http://localhost:3001/api/generate`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body)
+    body: JSON.stringify({ ...body, endpoint })
   });
 
   if (!response.ok) {

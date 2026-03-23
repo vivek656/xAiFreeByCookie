@@ -54,8 +54,8 @@ const App: React.FC = () => {
         setImagesData(newResults);
         setHistory(prev => [...newResults, ...prev]);
       }
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
       setIsLoading(false);
       setStatusMessage('');
@@ -77,12 +77,16 @@ const App: React.FC = () => {
         if (item.b64_json) {
           zip.file(fileName, item.b64_json, { base64: true });
         } else if (item.url) {
-          // Use our local proxy to fetch the asset to avoid CORS issues
-          const proxyUrl = `http://localhost:3001/api/proxy-asset?url=${encodeURIComponent(item.url)}`;
-          const response = await fetch(proxyUrl);
-          if (!response.ok) throw new Error(`Proxy failed to fetch asset: ${item.url}`);
-          const blob = await response.blob();
-          zip.file(fileName, blob);
+          // CALL VIA VITE PROXY
+          try {
+            const proxyUrl = `/proxy-asset?url=${encodeURIComponent(item.url)}`;
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error(`Proxy fetch failed for ${item.url}`);
+            const blob = await response.blob();
+            zip.file(fileName, blob);
+          } catch (fetchErr) {
+            console.error(`Proxy fetch error for ${item.url}:`, fetchErr);
+          }
         }
       }
       
@@ -91,9 +95,9 @@ const App: React.FC = () => {
       link.href = URL.createObjectURL(content);
       link.download = `xai-history-${Date.now()}.zip`;
       link.click();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('ZIP Error:', err);
-      setError(`Failed to create ZIP file: ${err.message}`);
+      setError(`Failed to create ZIP file: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setStatusMessage('');
     }
@@ -109,7 +113,10 @@ const App: React.FC = () => {
         setHistory(prev => [...validatedData, ...prev]);
         setError('');
       }
-    } catch (e) { setError('Failed to parse JSON.'); }
+    } catch (err: unknown) { 
+      console.error('Import Error:', err);
+      setError('Failed to parse JSON.'); 
+    }
   };
 
   const navigateLightbox = (direction: number) => {

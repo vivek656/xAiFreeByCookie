@@ -21,8 +21,10 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, isLoading, onUs
     if (!src) return;
     const link = document.createElement('a');
     const extension = data.mime_type.split('/')[1] || 'mp4';
+    // eslint-disable-next-line react-hooks/purity
+    const timestamp = Date.now();
     link.href = src;
-    link.download = `generated-${idx}-${Date.now()}.${extension}`;
+    link.download = `generated-${idx}-${timestamp}.${extension}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -33,7 +35,6 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, isLoading, onUs
     if (!src) return;
     const win = window.open();
     if (win) {
-      const title = data.revised_prompt || 'Generated Content';
       const content = data.mime_type.startsWith('video/') 
         ? `<video src="${src}" controls autoplay loop style="max-width:100%; max-height:100vh;"></video>`
         : `<img src="${src}" style="max-width:100%; max-height:100vh;" />`;
