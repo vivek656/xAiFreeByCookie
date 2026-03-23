@@ -1,12 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 interface ImageGeneratorProps {
   onGenerate: (prompt: string, n: number, aspectRatio: string, resolution: string, model: string, duration?: number, imageUrl?: string) => void;
   onImport: (jsonStr: string) => void;
   isLoading: boolean;
+  preselectedImageUrl?: string;
 }
 
-const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, onImport, isLoading }) => {
+const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, onImport, isLoading, preselectedImageUrl }) => {
   const [activeTab, setActiveTab] = useState<'generate' | 'import'>('generate');
   const [prompt, setPrompt] = useState<string>('');
   const [model, setModel] = useState<string>('grok-imagine-image');
@@ -17,6 +18,16 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, onImport, i
   const [imageUrl, setImageUrl] = useState<string>('');
   const [importJson, setImportJson] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync preselected image from gallery
+  useEffect(() => {
+    if (preselectedImageUrl) {
+      setImageUrl(preselectedImageUrl);
+      setModel('grok-imagine-video'); // Switch to video mode automatically
+      // Scroll to top to see the generator
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [preselectedImageUrl]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

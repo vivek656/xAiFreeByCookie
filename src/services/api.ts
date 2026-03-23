@@ -1,12 +1,12 @@
 export interface GenerateImageResponse {
   created?: number;
   data?: GenerateImageData[];
-  request_id?: string; // New field for video polling
+  request_id?: string;
 }
 
 export interface GenerateImageData {
   b64_json?: string;
-  url?: string; // Videos return a URL
+  url?: string;
   mime_type: string;
   revised_prompt: string;
 }
@@ -43,23 +43,32 @@ export const generateImage = async (params: GenerateImageParams): Promise<Genera
   const isVideo = model.includes('video');
   const endpoint = isVideo ? '/v1/videos/generations' : '/v1/images/generations';
 
-  let body: any = {
-    model,
-    prompt,
-  };
+  let body: any;
 
   if (isVideo) {
-    body.endpoint = endpoint;
-    body.resolution = (resolution === '2k' || resolution === '720p') ? '720p' : '480p';
-    body.duration = duration;
-    body.respect_moderation = false;
-    if (image_url) body.image = { url: image_url };
+    // STRICT Video Body
+    body = {
+      endpoint,
+      model,
+      prompt,
+      resolution: (resolution === '2k' || resolution === '720p') ? '720p' : '480p',
+      duration,
+      respect_moderation: false
+    };
+    if (image_url && image_url.startsWith('data:')) {
+      body.image = { url: image_url };
+    }
   } else {
-    body.endpoint = endpoint;
-    body.n = n;
-    body.aspect_ratio = aspect_ratio;
-    body.resolution = resolution;
-    body.response_format = "b64_json";
+    // STRICT Image Body
+    body = {
+      endpoint,
+      model,
+      prompt,
+      n,
+      aspect_ratio,
+      resolution,
+      response_format: "b64_json"
+    };
   }
 
   const response = await fetch('http://localhost:3001/api/generate', {

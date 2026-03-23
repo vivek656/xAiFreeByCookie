@@ -4,9 +4,10 @@ import type { GenerateImageData } from '../services/api';
 interface ImageDisplayProps {
   imagesData: GenerateImageData[];
   isLoading: boolean;
+  onUseForVideo?: (imageUrl: string) => void;
 }
 
-const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, isLoading }) => {
+const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, isLoading, onUseForVideo }) => {
   const [zoomStates, setZoomStates] = useState<Record<number, number>>({});
 
   const getSource = (data: GenerateImageData) => {
@@ -81,13 +82,14 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, isLoading }) =>
       {imagesData.map((data, idx) => {
         const isZoomed = zoomStates[idx] === 2;
         const src = getSource(data);
+        const isVideo = data.mime_type.startsWith('video/');
 
         return (
           <div key={idx} className={`gallery-item ${isZoomed ? 'zoomed' : ''}`}>
             <div className="image-card">
               <div className="image-container">
-                {data.mime_type.startsWith('video/') ? (
-                  <video src={src} controls loop autoPlay muted />
+                {isVideo ? (
+                  <video src={src} controls loop autoPlay muted style={{ transform: 'none' }} />
                 ) : (
                   <img 
                     src={src} 
@@ -99,10 +101,17 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, isLoading }) =>
               
               <div className="image-overlay">
                 <div className="overlay-actions">
-                  {!data.mime_type.startsWith('video/') && (
-                    <button onClick={() => toggleZoom(idx)} title="Toggle Zoom">
-                      {isZoomed ? '🔍-' : '🔍+'}
-                    </button>
+                  {!isVideo && (
+                    <>
+                      <button onClick={() => toggleZoom(idx)} title="Toggle Zoom">
+                        {isZoomed ? '🔍-' : '🔍+'}
+                      </button>
+                      {onUseForVideo && (
+                        <button onClick={() => onUseForVideo(src)} title="Use for Video">
+                          🎬
+                        </button>
+                      )}
+                    </>
                   )}
                   <button onClick={() => handleOpenInNewWindow(data)} title="Open Fullscreen">
                     ⛶

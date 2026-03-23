@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const https = require('follow-redirects').https;
+const http = require('follow-redirects').http;
+const { URL } = require('url');
 
 const app = express();
 app.use(cors());
@@ -31,11 +33,12 @@ app.post('/api/generate', (req, res) => {
     'headers': {
       'accept': '*/*',
       'accept-language': 'en-US,en;q=0.9,hi;q=0.8',
+      'baggage': process.env.VITE_XAI_BAGGAGE || '',
       'content-type': 'application/json',
       'origin': 'https://console.x.ai',
       'sec-fetch-dest': 'empty',
       'User-Agent': 'PostmanRuntime/7.52.0',
-      'Postman-Token': '26a32172-74fe-4347-b0a7-daf270c349d4',
+      'Postman-Token': 'cb2dc16a-ba7d-49c9-8242-26cd207b0c53',
       'Accept-Encoding': 'gzip, deflate, br',
       'Cookie': process.env.VITE_XAI_COOKIE || '',
     }
@@ -62,46 +65,54 @@ app.get('/api/status/:id', (req, res) => {
   };
 
   makeXaiRequest(options, null, (err, status, body) => {
-    // Explicitly handle 400 or other errors by trying the direct bucket URL
     if (status >= 400 || err) {
-      console.log(`Status check for ${id} returned ${status}. Attempting direct bucket fallback...`);
-      
       const fallbackUrl = `https://vidgen.x.ai/xai-vidgen-bucket/xai-video-${id}.mp4`;
-      const fallbackOptions = { 
-        method: 'HEAD', 
-        hostname: 'vidgen.x.ai', 
-        path: `/xai-vidgen-bucket/xai-video-${id}.mp4` 
-      };
-
+      const fallbackOptions = { method: 'HEAD', hostname: 'vidgen.x.ai', path: `/xai-vidgen-bucket/xai-video-${id}.mp4` };
       const headReq = https.request(fallbackOptions, (headRes) => {
         if (headRes.statusCode === 200) {
-          const successJson = {
+          res.json({
             status: 'done',
-            video: {
-              url: fallbackUrl,
-              duration: 6,
-              respect_moderation: false
-            },
+            video: { url: fallbackUrl, duration: 6, respect_moderation: false },
             model: "grok-imagine-video"
-          };
-          console.log(`Fallback successful for ${id}! URL: ${fallbackUrl}`);
-          res.json(successJson);
+          });
         } else {
-          console.log(`Fallback failed for ${id}. Bucket status: ${headRes.statusCode}`);
           res.status(status || 500).send(body || `Video not ready in bucket yet.`);
         }
       });
-      
-      headReq.on('error', (e) => {
-        console.error(`Network error during fallback for ${id}:`, e.message);
-        res.status(status || 500).send(body);
-      });
+      headReq.on('error', () => res.status(status || 500).send(body));
       headReq.end();
     } else {
-      console.log(`Official status for ${id}: ${status}`);
       res.setHeader('Content-Type', 'application/json');
       res.status(status).send(body);
     }
+  });
+});
+
+app.get('/api/proxy-asset', (req, res) => {
+  const assetUrl = req.query.url;
+  if (!assetUrl) return res.status(400).send('URL required');
+
+  console.log(`Proxying asset: ${assetUrl}`);
+  
+  const parsedUrl = new URL(assetUrl);
+  const options = {
+    hostname: parsedUrl.hostname,
+    path: parsedUrl.pathname + parsedUrl.search,
+    headers: {
+      'User-Agent': 'PostmanRuntime/7.52.0',
+      'Accept': '*/*',
+    }
+  };
+
+  https.get(options, (assetRes) => {
+    if (assetRes.statusCode >= 400) {
+      return res.status(assetRes.statusCode).send('Failed to fetch remote asset');
+    }
+    res.setHeader('Content-Type', assetRes.headers['content-type'] || 'application/octet-stream');
+    assetRes.pipe(res);
+  }).on('error', (err) => {
+    console.error('Asset Proxy Error:', err.message);
+    res.status(500).send(err.message);
   });
 });
 
