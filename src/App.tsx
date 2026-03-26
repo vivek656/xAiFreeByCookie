@@ -9,7 +9,7 @@ import JSZip from 'jszip';
 const App: React.FC = () => {
   const [imagesData, setImagesData] = useState<GenerateImageData[]>([]);
   const [history, setHistory] = useState<GenerateImageData[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [selectedSourceImageUrl, setSelectedSourceImageUrl] = useState<string>('');
@@ -22,7 +22,6 @@ const App: React.FC = () => {
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
   const handleGenerate = async (prompt: string, n: number, aspectRatio: string, resolution: string, model: string, duration?: number, image_url?: string) => {
-    setIsLoading(true);
     setError('');
     setStatusMessage('');
     
@@ -86,7 +85,6 @@ const App: React.FC = () => {
       // Remove placeholders on failure
       setImagesData(current => current.filter(item => !item.id?.startsWith(requestId)));
     } finally {
-      setIsLoading(false);
       setStatusMessage('');
     }
   };
@@ -358,7 +356,7 @@ const App: React.FC = () => {
         
         <div className="batch-actions">
           {statusMessage && <div className="status-message">{statusMessage}</div>}
-          {history.length > 0 && !isLoading && (
+          {history.length > 0 && (
             <button onClick={handleDownloadAll} className="download-all-btn">
               Download All History ZIP ( {history.length} items )
             </button>
@@ -375,7 +373,7 @@ const App: React.FC = () => {
           onOpenLightbox={handleOpenLightbox}
         />
 
-        {imagesData.length > 0 && !isLoading && (
+        {imagesData.length > 0 && (
           <div className="load-more-container">
             <button onClick={handleLoadMore} className="load-more-btn">
               Generate 4 More (Enhanced Prompt)

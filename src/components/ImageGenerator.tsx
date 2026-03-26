@@ -7,7 +7,7 @@ interface ImageGeneratorProps {
   preselectedImageUrl?: string;
 }
 
-const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, onImport, isLoading, preselectedImageUrl }) => {
+const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, onImport, preselectedImageUrl }) => {
   const [activeTab, setActiveTab] = useState<'generate' | 'import'>('generate');
   const [prompt, setPrompt] = useState<string>('');
   const [model, setModel] = useState<string>('grok-imagine-image');
@@ -80,7 +80,6 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, onImport, i
                 placeholder="Describe what you want to generate..."
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                disabled={isLoading}
                 required
               />
             </div>
@@ -121,7 +120,6 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, onImport, i
                   className="select-input"
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
-                  disabled={isLoading}
                 >
                   <option value="grok-imagine-image">Image</option>
                   <option value="grok-imagine-video">Video</option>
@@ -140,7 +138,6 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, onImport, i
                       className="select-input"
                       value={n}
                       onChange={(e) => setN(parseInt(e.target.value))}
-                      disabled={isLoading}
                     />
                   </div>
                   <div className="form-group">
@@ -150,7 +147,6 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, onImport, i
                       className="select-input"
                       value={aspectRatio}
                       onChange={(e) => setAspectRatio(e.target.value)}
-                      disabled={isLoading}
                     >
                       <option value="auto">Auto</option>
                       <option value="1:1">1:1</option>
@@ -172,7 +168,6 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, onImport, i
                     className="select-input"
                     value={duration}
                     onChange={(e) => setDuration(parseInt(e.target.value))}
-                    disabled={isLoading}
                   />
                 </div>
               )}
@@ -184,7 +179,6 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, onImport, i
                   className="select-input"
                   value={resolution}
                   onChange={(e) => setResolution(e.target.value)}
-                  disabled={isLoading}
                 >
                   {isVideo ? (
                     <>
@@ -216,14 +210,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, onImport, i
         )}
 
         <button type="submit" className="generate-button" disabled={(activeTab === 'generate' ? !prompt.trim() : !importJson.trim())}>
-          {isLoading ? (
-            <>
-              <div className="loader" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></div>
-              Adding to Queue...
-            </>
-          ) : (
-            activeTab === 'generate' ? 'Generate' : 'Import'
-          )}
+          {activeTab === 'generate' ? 'Generate' : 'Import'}
         </button>
       </form>
     </div>

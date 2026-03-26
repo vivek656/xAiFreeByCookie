@@ -3,12 +3,12 @@ import type { GenerateImageData } from '../services/api';
 
 interface ImageDisplayProps {
   imagesData: GenerateImageData[];
-  isLoading: boolean;
   onUseForVideo?: (imageUrl: string) => void;
   onGenerateVideo?: (imageItem: GenerateImageData, index: number) => void;
+  onOpenLightbox: (index: number) => void; // New prop
 }
 
-const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, onUseForVideo, onGenerateVideo }) => {
+const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, onUseForVideo, onGenerateVideo, onOpenLightbox }) => {
   const [zoomStates, setZoomStates] = useState<Record<number, number>>({});
 
   const getSource = (data: GenerateImageData) => {
@@ -29,26 +29,6 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, onUseForVideo, 
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
-
-  const handleOpenInNewWindow = (data: GenerateImageData) => {
-    const src = getSource(data);
-    if (!src) return;
-    const win = window.open();
-    if (win) {
-      const content = data.mime_type.startsWith('video/') 
-        ? `<video src="${src}" controls autoplay loop style="max-width:100%; max-height:100vh;"></video>`
-        : `<img src="${src}" style="max-width:100%; max-height:100vh;" />`;
-
-      win.document.write(`
-        <html>
-          <body style="margin:0; background:#000; display:flex; justify-content:center; align-items:center; min-height:100vh;">
-            ${content}
-          </body>
-        </html>
-      `);
-      win.document.close();
-    }
   };
 
   const toggleZoom = (idx: number) => {
@@ -115,14 +95,13 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, onUseForVideo, 
                           </button>
                         )}
                       </>
-                    )}
-                    <button onClick={() => handleOpenInNewWindow(data)} title="Open Fullscreen">
+                      )}
+                      <button onClick={() => onOpenLightbox(idx)} title="Open Fullscreen">
                       ⛶
-                    </button>
-                    <button onClick={() => handleDownload(data, idx)} title="Download">
+                      </button>
+                      <button onClick={() => handleDownload(data, idx)} title="Download">
                       ↓
-                    </button>
-                  </div>
+                      </button>                  </div>
                 )}
                 {data.revised_prompt && !isPending && (
                   <div className="overlay-prompt">
