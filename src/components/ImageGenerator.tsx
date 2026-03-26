@@ -53,7 +53,7 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, onImport, p
   const isVideo = model.includes('video');
 
   return (
-    <div className="generator-card">
+    <div className="generator-card glass">
       <div className="tab-header">
         <button 
           className={`tab-button ${activeTab === 'generate' ? 'active' : ''}`}

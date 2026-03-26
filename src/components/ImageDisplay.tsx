@@ -81,27 +81,27 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, onUseForVideo, 
                   <div className="overlay-actions">
                     {!isVideo && (
                       <>
-                        <button onClick={() => toggleZoom(idx)} title="Toggle Zoom">
+                        <button onClick={(e) => { e.stopPropagation(); toggleZoom(idx); }} title="Toggle Zoom">
                           {isZoomed ? '🔍-' : '🔍+'}
                         </button>
                         {onGenerateVideo && (
-                          <button onClick={() => onGenerateVideo(data, idx)} title="Instant Video Beside">
+                          <button onClick={(e) => { e.stopPropagation(); onGenerateVideo(data, idx); }} title="Instant Video Beside">
                             🎬
                           </button>
                         )}
                         {onUseForVideo && (
-                          <button onClick={() => onUseForVideo(src)} title="Use for Video (Form)">
+                          <button onClick={(e) => { e.stopPropagation(); onUseForVideo(src); }} title="Use for Video (Form)">
                             📋
                           </button>
                         )}
                       </>
-                      )}
-                      <button onClick={() => onOpenLightbox(idx)} title="Open Fullscreen">
+                    )}
+                    <button onClick={(e) => { e.stopPropagation(); onOpenLightbox(idx); }} title="Open Fullscreen">
                       ⛶
-                      </button>
-                      <button onClick={() => handleDownload(data, idx)} title="Download">
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); handleDownload(data, idx); }} title="Download">
                       ↓
-                      </button>                  </div>
+                    </button>                  </div>
                 )}
                 {data.revised_prompt && !isPending && (
                   <div className="overlay-prompt">

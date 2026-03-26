@@ -35,7 +35,8 @@ const App: React.FC = () => {
       url: ''
     }));
 
-    setImagesData(prev => [...prev, ...placeholders]);
+    // Put placeholders at the top
+    setImagesData(prev => [...placeholders, ...prev]);
 
     try {
       const currentPrompt = (lastRevisedPrompt && prompt === lastParams?.prompt) ? lastRevisedPrompt : prompt;
@@ -74,7 +75,7 @@ const App: React.FC = () => {
         // Replace placeholders with real results
         setImagesData(current => {
           const filtered = current.filter(item => !item.id?.startsWith(requestId));
-          return [...filtered, ...newResults];
+          return [...newResults, ...filtered];
         });
         setHistory(prev => [...newResults, ...prev]);
         setLastParams({ prompt, n, aspectRatio, resolution, model, duration });
@@ -103,11 +104,11 @@ const App: React.FC = () => {
     }
   };
 
-  const handleGenerateVideoDirect = async (sourceItem: GenerateImageData, index: number) => {
+  const handleGenerateVideoDirect = async (sourceItem: GenerateImageData) => {
     const src = sourceItem.url || (sourceItem.b64_json ? `data:${sourceItem.mime_type};base64,${sourceItem.b64_json}` : '');
     if (!src) return;
 
-    // 1. Insert placeholder beside the image
+    // 1. Insert placeholder at the TOP of the list
     const placeholderId = `pending-video-${Date.now()}`;
     const placeholder: GenerateImageData = {
       id: placeholderId,
@@ -117,9 +118,7 @@ const App: React.FC = () => {
     };
     
     setImagesData(current => {
-      const updated = [...current];
-      updated.splice(index + 1, 0, placeholder);
-      return updated;
+      return [placeholder, ...current];
     });
 
     try {
@@ -207,7 +206,7 @@ const App: React.FC = () => {
       const data = parsed.data || parsed;
       const validatedData = Array.isArray(data) ? data : (data ? [data] : []);
       if (validatedData.length > 0) {
-        setImagesData(validatedData);
+        setImagesData(prev => [...validatedData, ...prev]);
         setHistory(prev => [...validatedData, ...prev]);
         setError('');
       }
@@ -221,7 +220,7 @@ const App: React.FC = () => {
     const src = itemToEdit.url || (itemToEdit.b64_json ? `data:${itemToEdit.mime_type};base64,${itemToEdit.b64_json}` : '');
     if (!src || !promptToUse.trim()) return;
 
-    // Insert placeholder beside the original item
+    // Insert placeholder at the top of the list
     const originalIndex = imagesData.findIndex(item => item.id === itemToEdit.id);
     if (originalIndex === -1) return;
 
@@ -237,13 +236,7 @@ const App: React.FC = () => {
     setIsEditing(true);
     
     setImagesData(current => {
-      const updated = [...current];
-      // Find the actual index of the item, not just history index
-      const actualIndex = updated.findIndex(item => item.id === itemToEdit.id);
-      if (actualIndex !== -1) {
-        updated.splice(actualIndex + 1, 0, placeholder);
-      }
-      return updated;
+      return [placeholder, ...current];
     });
 
     // Run the edit process in background so the modal stays open
@@ -367,7 +360,6 @@ const App: React.FC = () => {
         
         <ImageDisplay 
           imagesData={imagesData} 
-          isLoading={isLoading} 
           onUseForVideo={setSelectedSourceImageUrl}
           onGenerateVideo={handleGenerateVideoDirect}
           onOpenLightbox={handleOpenLightbox}
@@ -422,37 +414,58 @@ const App: React.FC = () => {
           <button className="lightbox-nav next" onClick={(e) => { e.stopPropagation(); navigateLightbox(1); }}>›</button>
           
           <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
-            {imagesData[lightboxIdx].mime_type.startsWith('video/') ? (
-              <video src={imagesData[lightboxIdx].url} controls autoPlay loop />
-            ) : (
-              <img src={imagesData[lightboxIdx].url || `data:${imagesData[lightboxIdx].mime_type};base64,${imagesData[lightboxIdx].b64_json}`} alt="Maximized" />
-            )}
-            <div className="lightbox-info">
-              <p>{imagesData[lightboxIdx].revised_prompt}</p>
+            <div className="lightbox-media-container">
+              {imagesData[lightboxIdx].mime_type.startsWith('video/') ? (
+                <video src={imagesData[lightboxIdx].url} controls autoPlay loop />
+              ) : (
+                <img src={imagesData[lightboxIdx].url || `data:${imagesData[lightboxIdx].mime_type};base64,${imagesData[lightboxIdx].b64_json}`} alt="Maximized" />
+              )}
+            </div>
+            
+            <div className="lightbox-info-container">
+              <div className="lightbox-prompt-box">
+                <h4>Prompt</h4>
+                <p>{imagesData[lightboxIdx].revised_prompt}</p>
+              </div>
+              
               <div className="lightbox-actions">
-                <button onClick={() => {
-                  const item = imagesData[lightboxIdx];
-                  if (!item || item.mime_type.endsWith('/pending')) return;
-                  const link = document.createElement('a');
-                  const ext = item.mime_type.split('/')[1] || 'png';
-                  link.href = item.url || `data:${item.mime_type};base64,${item.b64_json}`;
-                  link.download = `history-${Date.now()}.${ext}`;
-                  link.click();
-                }}>Download</button>
-                {!imagesData[lightboxIdx].mime_type.startsWith('video/') && (
-                  <button onClick={() => {
+                <button 
+                  className="primary"
+                  onClick={() => {
                     const item = imagesData[lightboxIdx];
                     if (!item || item.mime_type.endsWith('/pending')) return;
-                    setSelectedSourceImageUrl(item.url || `data:${item.mime_type};base64,${item.b64_json}`);
-                    setLightboxIdx(null);
-                  }}>Use for Video</button>
+                    const link = document.createElement('a');
+                    const ext = item.mime_type.split('/')[1] || 'png';
+                    link.href = item.url || `data:${item.mime_type};base64,${item.b64_json}`;
+                    link.download = `history-${Date.now()}.${ext}`;
+                    link.click();
+                  }}>
+                  <span>⏬</span> Download High-Res
+                </button>
+                
+                {!imagesData[lightboxIdx].mime_type.startsWith('video/') && (
+                  <button 
+                    onClick={() => {
+                      const item = imagesData[lightboxIdx];
+                      if (!item || item.mime_type.endsWith('/pending')) return;
+                      setSelectedSourceImageUrl(item.url || `data:${item.mime_type};base64,${item.b64_json}`);
+                      setLightboxIdx(null);
+                    }}>
+                    <span>🎬</span> Use Image for Video Gen
+                  </button>
                 )}
               </div>
               
               {/* Edit Section */}
               {!imagesData[lightboxIdx].mime_type.endsWith('/pending') && (
                 <div className="lightbox-edit-section">
-                  <h3>Tweak this Media</h3>
+                  <h3>Tweak Media via Conversational AI</h3>
+                  <textarea
+                    placeholder="Provide a conversational prompt to Grok... e.g., 'Make it look like a renaissance painting' or 'Change the car to a spaceship'"
+                    value={editPrompt}
+                    onChange={(e) => setEditPrompt(e.target.value)}
+                    rows={4}
+                  />
                   <div className="edit-controls">
                     <button
                       onClick={() => handleEditMedia(
@@ -462,18 +475,12 @@ const App: React.FC = () => {
                       )}
                       disabled={!editPrompt.trim() || isEditing}
                     >
-                      {isEditing ? 'Queued...' : 'Tweak Media'}
+                      {isEditing ? 'Working on it...' : 'Apply Tweak'}
                     </button>
                     <div className="edit-status">
-                      {isEditing ? 'Edit queued — processing...' : 'Ready to edit'}
+                      {isEditing ? 'Grok is editing your media...' : ''}
                     </div>
                   </div>
-                  <textarea
-                    placeholder="e.g., 'Make it look like a renaissance painting' or 'Change the car to a spaceship'"
-                    value={editPrompt}
-                    onChange={(e) => setEditPrompt(e.target.value)}
-                    rows={3}
-                  />
                 </div>
               )}
             </div>
