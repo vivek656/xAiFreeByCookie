@@ -463,6 +463,19 @@ body {
   font-size: 1.5rem;
 }
 
+.video-pending-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
 /* Lightbox Modal */
 .lightbox-overlay {
   position: fixed;
@@ -713,4 +726,40 @@ body {
   .app-header h1 {
     font-size: 2rem;
   }
+}
+
+.load-more-container {
+  margin: 2rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.load-more-btn {
+  padding: 0.8rem 2rem;
+  background: var(--primary-color, #3b82f6);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.load-more-btn:hover {
+  opacity: 0.9;
+}
+
+.revised-prompt-preview {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  max-width: 600px;
+  text-align: center;
+  line-height: 1.4;
+  font-style: italic;
 }

@@ -13,6 +13,8 @@ const App: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [selectedSourceImageUrl, setSelectedSourceImageUrl] = useState<string>('');
+  const [lastParams, setLastParams] = useState<{prompt: string, n: number, aspectRatio: string, resolution: string, model: string, duration?: number} | null>(null);
+  const [lastRevisedPrompt, setLastRevisedPrompt] = useState<string>('');
   
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -21,18 +23,30 @@ const App: React.FC = () => {
     setIsLoading(true);
     setError('');
     setStatusMessage('');
-    setImagesData([]);
+    
+    // Create unique placeholders for this request batch
+    const requestId = `batch-${Date.now()}`;
+    const isVideo = model.includes('video');
+    const placeholders: GenerateImageData[] = Array.from({ length: isVideo ? 1 : n }).map((_, i) => ({
+      id: `${requestId}-${i}`,
+      mime_type: isVideo ? 'video/pending' : 'image/pending',
+      revised_prompt: prompt,
+      url: ''
+    }));
+
+    setImagesData(prev => [...prev, ...placeholders]);
 
     try {
+      const currentPrompt = (lastRevisedPrompt && prompt === lastParams?.prompt) ? lastRevisedPrompt : prompt;
+      
       const response = await generateImage({
-        prompt, n, aspect_ratio: aspectRatio, resolution, model, duration, image_url
+        prompt: currentPrompt, n, aspect_ratio: aspectRatio, resolution, model, duration, image_url
       });
       
       let newResults: GenerateImageData[] = [];
 
       if (response.request_id) {
         let isDone = false;
-        setStatusMessage('Video is pending...');
         while (!isDone) {
           await new Promise(resolve => setTimeout(resolve, 3000));
           const status: VideoStatusResponse = await checkVideoStatus(response.request_id);
@@ -48,17 +62,97 @@ const App: React.FC = () => {
         }
       } else if (response.data) {
         newResults = response.data;
+        // Capture the revised prompt for the next iterative enhancement
+        if (newResults[0]?.revised_prompt) {
+          setLastRevisedPrompt(newResults[0].revised_prompt);
+        }
       }
 
       if (newResults.length > 0) {
-        setImagesData(newResults);
+        // Replace placeholders with real results
+        setImagesData(current => {
+          const filtered = current.filter(item => !item.id?.startsWith(requestId));
+          return [...filtered, ...newResults];
+        });
         setHistory(prev => [...newResults, ...prev]);
+        setLastParams({ prompt, n, aspectRatio, resolution, model, duration });
       }
     } catch (err: unknown) {
+      console.error('Generation error:', err);
       setError(err instanceof Error ? err.message : 'Something went wrong.');
+      // Remove placeholders on failure
+      setImagesData(current => current.filter(item => !item.id?.startsWith(requestId)));
     } finally {
       setIsLoading(false);
       setStatusMessage('');
+    }
+  };
+
+  const handleLoadMore = () => {
+    if (lastParams) {
+      handleGenerate(
+        lastParams.prompt, 
+        lastParams.n, 
+        lastParams.aspectRatio, 
+        lastParams.resolution, 
+        lastParams.model, 
+        lastParams.duration,
+        selectedSourceImageUrl // Preserve source image if any
+      );
+    }
+  };
+
+  const handleGenerateVideoDirect = async (sourceItem: GenerateImageData, index: number) => {
+    const src = sourceItem.url || (sourceItem.b64_json ? `data:${sourceItem.mime_type};base64,${sourceItem.b64_json}` : '');
+    if (!src) return;
+
+    // 1. Insert placeholder beside the image
+    const placeholderId = `pending-${Date.now()}`;
+    const placeholder: GenerateImageData = {
+      id: placeholderId,
+      mime_type: 'video/pending',
+      revised_prompt: sourceItem.revised_prompt,
+      url: ''
+    };
+    
+    const newImagesData = [...imagesData];
+    newImagesData.splice(index + 1, 0, placeholder);
+    setImagesData(newImagesData);
+
+    try {
+      const response = await generateImage({
+        prompt: sourceItem.revised_prompt,
+        model: 'grok-imagine-video',
+        image_url: src,
+        duration: 5,
+        resolution: '480p'
+      });
+
+      if (response.request_id) {
+        let isDone = false;
+        while (!isDone) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          const status = await checkVideoStatus(response.request_id);
+          if (status.status === 'done' && status.video) {
+            const finalVideo: GenerateImageData = {
+              url: status.video.url,
+              mime_type: 'video/mp4',
+              revised_prompt: sourceItem.revised_prompt
+            };
+            // Replace placeholder with actual video
+            setImagesData(current => current.map(item => item.id === placeholderId ? finalVideo : item));
+            setHistory(prev => [finalVideo, ...prev]);
+            isDone = true;
+          } else if (status.status === 'failed' || status.status === 'expired') {
+            throw new Error('Video generation failed at xAI.');
+          }
+        }
+      }
+    } catch (err: unknown) {
+      console.error('In-place video error:', err);
+      // Remove placeholder on failure as requested
+      setImagesData(current => current.filter(item => item.id !== placeholderId));
+      setError(err instanceof Error ? err.message : 'Video generation failed.');
     }
   };
 
@@ -179,7 +273,21 @@ const App: React.FC = () => {
           imagesData={imagesData} 
           isLoading={isLoading} 
           onUseForVideo={setSelectedSourceImageUrl}
+          onGenerateVideo={handleGenerateVideoDirect}
         />
+
+        {imagesData.length > 0 && !isLoading && (
+          <div className="load-more-container">
+            <button onClick={handleLoadMore} className="load-more-btn">
+              Generate 4 More (Enhanced Prompt)
+            </button>
+            {lastRevisedPrompt && (
+              <p className="revised-prompt-preview">
+                <strong>Next Prompt:</strong> {lastRevisedPrompt}
+              </p>
+            )}
+          </div>
+        )}
       </main>
 
       {/* History Full Modal */}

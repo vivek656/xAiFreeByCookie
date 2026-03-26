@@ -11,9 +11,9 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, onImport, i
   const [activeTab, setActiveTab] = useState<'generate' | 'import'>('generate');
   const [prompt, setPrompt] = useState<string>('');
   const [model, setModel] = useState<string>('grok-imagine-image');
-  const [n, setN] = useState<number>(1);
+  const [n, setN] = useState<number>(4);
   const [aspectRatio, setAspectRatio] = useState<string>('auto');
-  const [resolution, setResolution] = useState<string>('1k');
+  const [resolution, setResolution] = useState<string>('2k');
   const [duration, setDuration] = useState<number>(5);
   const [imageUrl, setImageUrl] = useState<string>('');
   const [importJson, setImportJson] = useState<string>('');
@@ -215,11 +215,11 @@ const ImageGenerator: React.FC<ImageGeneratorProps> = ({ onGenerate, onImport, i
           </div>
         )}
 
-        <button type="submit" className="generate-button" disabled={isLoading || (activeTab === 'generate' ? !prompt.trim() : !importJson.trim())}>
+        <button type="submit" className="generate-button" disabled={(activeTab === 'generate' ? !prompt.trim() : !importJson.trim())}>
           {isLoading ? (
             <>
               <div className="loader" style={{ width: '20px', height: '20px', borderWidth: '2px' }}></div>
-              Generating...
+              Adding to Queue...
             </>
           ) : (
             activeTab === 'generate' ? 'Generate' : 'Import'

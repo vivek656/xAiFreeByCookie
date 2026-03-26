@@ -5,9 +5,10 @@ interface ImageDisplayProps {
   imagesData: GenerateImageData[];
   isLoading: boolean;
   onUseForVideo?: (imageUrl: string) => void;
+  onGenerateVideo?: (imageItem: GenerateImageData, index: number) => void;
 }
 
-const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, isLoading, onUseForVideo }) => {
+const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, onUseForVideo, onGenerateVideo }) => {
   const [zoomStates, setZoomStates] = useState<Record<number, number>>({});
 
   const getSource = (data: GenerateImageData) => {
@@ -57,17 +58,6 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, isLoading, onUs
     }));
   };
 
-  if (isLoading) {
-    return (
-      <div className="gallery-container">
-        <div className="loader-wrapper">
-          <div className="loader"></div>
-          <p>Processing results...</p>
-        </div>
-      </div>
-    );
-  }
-
   if (imagesData.length === 0) {
     return (
       <div className="gallery-container">
@@ -84,12 +74,18 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, isLoading, onUs
         const isZoomed = zoomStates[idx] === 2;
         const src = getSource(data);
         const isVideo = data.mime_type.startsWith('video/');
+        const isPending = data.mime_type.endsWith('/pending');
 
         return (
           <div key={idx} className={`gallery-item ${isZoomed ? 'zoomed' : ''}`}>
             <div className="image-card">
               <div className="image-container">
-                {isVideo ? (
+                {isPending ? (
+                  <div className="video-pending-loader">
+                    <div className="loader" style={{ width: '30px', height: '30px' }}></div>
+                    <p>{isVideo ? 'Generating Video...' : 'Generating Image...'}</p>
+                  </div>
+                ) : isVideo ? (
                   <video src={src} controls loop autoPlay muted style={{ transform: 'none' }} />
                 ) : (
                   <img 
@@ -101,27 +97,34 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ imagesData, isLoading, onUs
               </div>
               
               <div className="image-overlay">
-                <div className="overlay-actions">
-                  {!isVideo && (
-                    <>
-                      <button onClick={() => toggleZoom(idx)} title="Toggle Zoom">
-                        {isZoomed ? '🔍-' : '🔍+'}
-                      </button>
-                      {onUseForVideo && (
-                        <button onClick={() => onUseForVideo(src)} title="Use for Video">
-                          🎬
+                {!isPending && (
+                  <div className="overlay-actions">
+                    {!isVideo && (
+                      <>
+                        <button onClick={() => toggleZoom(idx)} title="Toggle Zoom">
+                          {isZoomed ? '🔍-' : '🔍+'}
                         </button>
-                      )}
-                    </>
-                  )}
-                  <button onClick={() => handleOpenInNewWindow(data)} title="Open Fullscreen">
-                    ⛶
-                  </button>
-                  <button onClick={() => handleDownload(data, idx)} title="Download">
-                    ↓
-                  </button>
-                </div>
-                {data.revised_prompt && (
+                        {onGenerateVideo && (
+                          <button onClick={() => onGenerateVideo(data, idx)} title="Instant Video Beside">
+                            🎬
+                          </button>
+                        )}
+                        {onUseForVideo && (
+                          <button onClick={() => onUseForVideo(src)} title="Use for Video (Form)">
+                            📋
+                          </button>
+                        )}
+                      </>
+                    )}
+                    <button onClick={() => handleOpenInNewWindow(data)} title="Open Fullscreen">
+                      ⛶
+                    </button>
+                    <button onClick={() => handleDownload(data, idx)} title="Download">
+                      ↓
+                    </button>
+                  </div>
+                )}
+                {data.revised_prompt && !isPending && (
                   <div className="overlay-prompt">
                     {data.revised_prompt}
                   </div>
