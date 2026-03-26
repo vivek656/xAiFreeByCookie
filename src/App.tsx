@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import './App.css';
-import { generateImage, checkVideoStatus } from './services/api';
+import { generateImage, checkVideoStatus, editMedia } from './services/api';
 import type { GenerateImageData, VideoStatusResponse } from './services/api';
 import ImageGenerator from './components/ImageGenerator';
 import ImageDisplay from './components/ImageDisplay';
@@ -15,6 +15,8 @@ const App: React.FC = () => {
   const [selectedSourceImageUrl, setSelectedSourceImageUrl] = useState<string>('');
   const [lastParams, setLastParams] = useState<{prompt: string, n: number, aspectRatio: string, resolution: string, model: string, duration?: number} | null>(null);
   const [lastRevisedPrompt, setLastRevisedPrompt] = useState<string>('');
+  const [editPrompt, setEditPrompt] = useState<string>(''); // New state for edit prompt
+  const [isEditing, setIsEditing] = useState<boolean>(false);
   
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -54,14 +56,15 @@ const App: React.FC = () => {
             newResults = [{
               url: status.video.url,
               mime_type: 'video/mp4',
-              revised_prompt: prompt
+              revised_prompt: prompt,
+              id: `${requestId}-${0}` // Assign ID for later identification
             }];
             isDone = true;
           } else if (status.status === 'failed') throw new Error('Video generation failed.');
           else if (status.status === 'expired') throw new Error('Request expired.');
         }
       } else if (response.data) {
-        newResults = response.data;
+        newResults = response.data.map((item, i) => ({ ...item, id: `${requestId}-${i}` })); // Assign IDs
         // Capture the revised prompt for the next iterative enhancement
         if (newResults[0]?.revised_prompt) {
           setLastRevisedPrompt(newResults[0].revised_prompt);
@@ -107,7 +110,7 @@ const App: React.FC = () => {
     if (!src) return;
 
     // 1. Insert placeholder beside the image
-    const placeholderId = `pending-${Date.now()}`;
+    const placeholderId = `pending-video-${Date.now()}`;
     const placeholder: GenerateImageData = {
       id: placeholderId,
       mime_type: 'video/pending',
@@ -115,9 +118,11 @@ const App: React.FC = () => {
       url: ''
     };
     
-    const newImagesData = [...imagesData];
-    newImagesData.splice(index + 1, 0, placeholder);
-    setImagesData(newImagesData);
+    setImagesData(current => {
+      const updated = [...current];
+      updated.splice(index + 1, 0, placeholder);
+      return updated;
+    });
 
     try {
       const response = await generateImage({
@@ -132,12 +137,13 @@ const App: React.FC = () => {
         let isDone = false;
         while (!isDone) {
           await new Promise(resolve => setTimeout(resolve, 3000));
-          const status = await checkVideoStatus(response.request_id);
+          const status: VideoStatusResponse = await checkVideoStatus(response.request_id);
           if (status.status === 'done' && status.video) {
             const finalVideo: GenerateImageData = {
               url: status.video.url,
               mime_type: 'video/mp4',
-              revised_prompt: sourceItem.revised_prompt
+              revised_prompt: sourceItem.revised_prompt,
+              id: placeholderId // Use the same ID to replace
             };
             // Replace placeholder with actual video
             setImagesData(current => current.map(item => item.id === placeholderId ? finalVideo : item));
@@ -213,10 +219,102 @@ const App: React.FC = () => {
     }
   };
 
+  const handleEditMedia = async (itemToEdit: GenerateImageData, promptToUse: string, model: string) => {
+    const src = itemToEdit.url || (itemToEdit.b64_json ? `data:${itemToEdit.mime_type};base64,${itemToEdit.b64_json}` : '');
+    if (!src || !promptToUse.trim()) return;
+
+    // Insert placeholder beside the original item
+    const originalIndex = imagesData.findIndex(item => item.id === itemToEdit.id);
+    if (originalIndex === -1) return;
+
+    const placeholderId = `editing-${Date.now()}`;
+    const isVideo = itemToEdit.mime_type.startsWith('video/');
+    const placeholder: GenerateImageData = {
+      id: placeholderId,
+      mime_type: isVideo ? 'video/pending' : 'image/pending',
+      revised_prompt: `Editing: ${promptToUse}`,
+      url: ''
+    };
+
+    setIsEditing(true);
+    
+    setImagesData(current => {
+      const updated = [...current];
+      // Find the actual index of the item, not just history index
+      const actualIndex = updated.findIndex(item => item.id === itemToEdit.id);
+      if (actualIndex !== -1) {
+        updated.splice(actualIndex + 1, 0, placeholder);
+      }
+      return updated;
+    });
+
+    // Run the edit process in background so the modal stays open
+    (async () => {
+      try {
+        const response = await editMedia({
+          prompt: promptToUse,
+          model: model, // 'grok-imagine-image' or 'grok-imagine-video'
+          image_url: isVideo ? undefined : src,
+          video_url: isVideo ? src : undefined
+        });
+
+        let newResult: GenerateImageData | null = null;
+
+        if (response.request_id) {
+          let isDone = false;
+          while (!isDone) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            const status: VideoStatusResponse = await checkVideoStatus(response.request_id);
+            if (status.status === 'done' && status.video) {
+              newResult = {
+                url: status.video.url,
+                mime_type: 'video/mp4',
+                revised_prompt: promptToUse,
+                id: `edited-${Date.now()}` // Give it a new unique ID
+              };
+              isDone = true;
+            } else if (status.status === 'failed' || status.status === 'expired') {
+              throw new Error('Media editing failed at xAI.');
+            }
+          }
+        } else if (response.data && response.data.length > 0) {
+          newResult = { ...response.data[0], revised_prompt: promptToUse, id: `edited-${Date.now()}` }; // Give it a new unique ID
+        }
+
+        if (newResult) {
+          // Replace placeholder with actual result
+          setImagesData(current => current.map(item => item.id === placeholderId ? newResult! : item));
+          setHistory(prev => [newResult!, ...prev]);
+        } else {
+          throw new Error('No data received from edit API.');
+        }
+      } catch (err: unknown) {
+        console.error('Media editing error:', err);
+        // Remove placeholder on failure
+        setImagesData(current => current.filter(item => item.id !== placeholderId));
+        setError(err instanceof Error ? err.message : 'Media editing failed.');
+      } finally {
+        setIsEditing(false);
+        // Keep the lightbox open so the user stays on the same popup
+      }
+    })();
+
+    // Return immediately; job runs in background
+  };
+
+  const handleOpenLightbox = (index: number) => {
+    setLightboxIdx(index);
+    // Set initial edit prompt to current item's revised prompt for convenience
+    setEditPrompt(imagesData[index]?.revised_prompt || '');
+  };
+
+  // Lightbox navigation
   const navigateLightbox = (direction: number) => {
     if (lightboxIdx === null) return;
-    const nextIdx = (lightboxIdx + direction + history.length) % history.length;
+    // We navigate through the entire 'imagesData' for the lightbox
+    const nextIdx = (lightboxIdx + direction + imagesData.length) % imagesData.length;
     setLightboxIdx(nextIdx);
+    setEditPrompt(imagesData[nextIdx]?.revised_prompt || ''); // Update edit prompt when navigating
   };
 
   return (
@@ -233,7 +331,7 @@ const App: React.FC = () => {
           </div>
           <div className="history-widget-grid">
             {history.slice(0, 4).map((item, idx) => (
-              <div key={idx} className="history-thumb-mini" onClick={() => setLightboxIdx(idx)}>
+              <div key={idx} className="history-thumb-mini" onClick={() => handleOpenLightbox(imagesData.findIndex(data => data.id === item.id))}>
                 {item.mime_type.startsWith('video/') ? (
                   <div className="video-icon-mini">🎬</div>
                 ) : (
@@ -274,6 +372,7 @@ const App: React.FC = () => {
           isLoading={isLoading} 
           onUseForVideo={setSelectedSourceImageUrl}
           onGenerateVideo={handleGenerateVideoDirect}
+          onOpenLightbox={handleOpenLightbox}
         />
 
         {imagesData.length > 0 && !isLoading && (
@@ -303,7 +402,7 @@ const App: React.FC = () => {
             </div>
             <div className="history-full-grid">
               {history.map((item, idx) => (
-                <div key={idx} className="history-item-full" onClick={() => { setLightboxIdx(idx); setIsHistoryModalOpen(false); }}>
+                <div key={idx} className="history-item-full" onClick={() => handleOpenLightbox(imagesData.findIndex(data => data.id === item.id))}>
                   {item.mime_type.startsWith('video/') ? (
                     <div className="video-preview-full">🎬 Video</div>
                   ) : (
@@ -318,36 +417,67 @@ const App: React.FC = () => {
       )}
 
       {/* Lightbox Modal */}
-      {lightboxIdx !== null && (
+      {lightboxIdx !== null && imagesData[lightboxIdx] && (
         <div className="lightbox-overlay" onClick={() => setLightboxIdx(null)}>
           <button className="lightbox-close" onClick={() => setLightboxIdx(null)}>×</button>
           <button className="lightbox-nav prev" onClick={(e) => { e.stopPropagation(); navigateLightbox(-1); }}>‹</button>
           <button className="lightbox-nav next" onClick={(e) => { e.stopPropagation(); navigateLightbox(1); }}>›</button>
           
           <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
-            {history[lightboxIdx].mime_type.startsWith('video/') ? (
-              <video src={history[lightboxIdx].url} controls autoPlay loop />
+            {imagesData[lightboxIdx].mime_type.startsWith('video/') ? (
+              <video src={imagesData[lightboxIdx].url} controls autoPlay loop />
             ) : (
-              <img src={history[lightboxIdx].url || `data:${history[lightboxIdx].mime_type};base64,${history[lightboxIdx].b64_json}`} alt="Maximized" />
+              <img src={imagesData[lightboxIdx].url || `data:${imagesData[lightboxIdx].mime_type};base64,${imagesData[lightboxIdx].b64_json}`} alt="Maximized" />
             )}
             <div className="lightbox-info">
-              <p>{history[lightboxIdx].revised_prompt}</p>
+              <p>{imagesData[lightboxIdx].revised_prompt}</p>
               <div className="lightbox-actions">
                 <button onClick={() => {
-                  const item = history[lightboxIdx];
+                  const item = imagesData[lightboxIdx];
+                  if (!item || item.mime_type.endsWith('/pending')) return;
                   const link = document.createElement('a');
                   const ext = item.mime_type.split('/')[1] || 'png';
                   link.href = item.url || `data:${item.mime_type};base64,${item.b64_json}`;
                   link.download = `history-${Date.now()}.${ext}`;
                   link.click();
                 }}>Download</button>
-                {!history[lightboxIdx].mime_type.startsWith('video/') && (
+                {!imagesData[lightboxIdx].mime_type.startsWith('video/') && (
                   <button onClick={() => {
-                    setSelectedSourceImageUrl(history[lightboxIdx].url || `data:${history[lightboxIdx].mime_type};base64,${history[lightboxIdx].b64_json}`);
+                    const item = imagesData[lightboxIdx];
+                    if (!item || item.mime_type.endsWith('/pending')) return;
+                    setSelectedSourceImageUrl(item.url || `data:${item.mime_type};base64,${item.b64_json}`);
                     setLightboxIdx(null);
                   }}>Use for Video</button>
                 )}
               </div>
+              
+              {/* Edit Section */}
+              {!imagesData[lightboxIdx].mime_type.endsWith('/pending') && (
+                <div className="lightbox-edit-section">
+                  <h3>Tweak this Media</h3>
+                  <div className="edit-controls">
+                    <button
+                      onClick={() => handleEditMedia(
+                        imagesData[lightboxIdx],
+                        editPrompt,
+                        imagesData[lightboxIdx].mime_type.startsWith('video/') ? 'grok-imagine-video' : 'grok-imagine-image'
+                      )}
+                      disabled={!editPrompt.trim() || isEditing}
+                    >
+                      {isEditing ? 'Queued...' : 'Tweak Media'}
+                    </button>
+                    <div className="edit-status">
+                      {isEditing ? 'Edit queued — processing...' : 'Ready to edit'}
+                    </div>
+                  </div>
+                  <textarea
+                    placeholder="e.g., 'Make it look like a renaissance painting' or 'Change the car to a spaceship'"
+                    value={editPrompt}
+                    onChange={(e) => setEditPrompt(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
